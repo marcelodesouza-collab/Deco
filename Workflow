@@ -1,0 +1,617 @@
+# Estrutura de Workflows - Guia Completo
+
+## O que são Workflows?
+
+Workflows são processos automatizados que combinam **tools**, **code steps** e **lógica condicional** em sequências organizadas. Eles permitem orquestrar tarefas complexas de forma estruturada e reutilizável.
+
+## Conceitos Fundamentais
+
+### Padrão de Execução
+
+Workflows executam **tool calls sequencialmente em steps**, onde:
+
+1. **Cada step é uma Tool Call** - Um módulo ES que exporta uma função async
+2. **Input com @refs resolvidos** - O input recebe valores com @refs já substituídos
+3. **Steps chamam tools via ctx.env** - Acesso a integrações através do contexto
+4. **Output reutilizável** - O resultado de cada step pode ser usado por outros steps
+
+### Fluxo de Dados
+
+```
+Input → Step 1 (Tool Call) → Output 1
+                             ↓
+                          Step 2 (Tool Call) → Output 2
+                                              ↓
+                                           Step 3 (Tool Call) → Final Output
+```
+
+## Estrutura de um Step
+
+### Anatomia Completa
+
+```json
+{
+  "def": {
+    "name": "generate-poem",
+    "title": "Gerador de Poemas",
+    "description": "Gera um poema sobre uma cidade usando IA",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "cityName": {
+          "type": "string",
+          "description": "Nome da cidade"
+        }
+      },
+      "required": ["cityName"]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "poem": {
+          "type": "string",
+          "description": "Poema gerado"
+        },
+        "wordCount": {
+          "type": "number",
+          "description": "Número de palavras"
+        }
+      },
+      "required": ["poem", "wordCount"]
+    },
+    "execute": "export default async function(input, ctx) { ... }",
+    "dependencies": [
+      {
+        "integrationId": "i:ai-generation",
+        "toolNames": ["AI_GENERATE_OBJECT"]
+      }
+    ]
+  },
+  "input": {
+    "cityName": "@previous-step.cityName"
+  },
+  "options": {
+    "timeout": 300000,
+    "retries": {
+      "limit": 2,
+      "delay": 2000,
+      "backoff": "exponential"
+    }
+  }
+}
+```
+
+### Componentes do Step
+
+1\. Definition (def)
+
+**name** (obrigatório)
+
+- Nome único do step dentro do workflow
+- Use kebab-case: `generate-poem`, `process-data`
+- Será usado em @refs: `@generate-poem.poem`
+
+**title** (opcional)
+
+- Título amigável para exibição
+
+**description** (obrigatório)
+
+- Descrição clara do que o step faz
+- Ajuda na documentação e debugging
+
+**inputSchema** (opcional)
+
+- Define a estrutura de entrada usando JSON Schema
+- Validação automática dos dados recebidos
+
+**outputSchema** (opcional)
+
+- Define a estrutura de saída usando JSON Schema
+- **CRÍTICO**: A função DEVE retornar TODAS as propriedades definidas aqui
+
+**execute** (obrigatório)
+
+- Código ES module com a função de execução
+- Veremos em detalhes abaixo
+
+**dependencies** (opcional)
+
+- Lista de integrações e tools necessários
+- Formato: `{ integrationId, toolNames }`
+
+2\. Input
+
+Objeto que define os valores de entrada para o step:
+
+- Pode usar valores literais: `{ "city": "São Paulo" }`
+- Pode usar @refs: `{ "city": "@previous-step.cityName" }`
+- Deve estar em conformidade com o inputSchema
+
+3\. Options
+
+**timeout**
+
+- Tempo máximo de execução em milissegundos
+- Padrão: 300000 (5 minutos)
+
+**retries**
+
+- `limit`: Número de tentativas (padrão: 2)
+- `delay`: Tempo entre tentativas em ms (padrão: 2000)
+- `backoff`: Estratégia (constant, linear, exponential)
+
+## Execute Function - A Função de Execução
+
+### Assinatura
+
+```javascript
+export default async function(input, ctx) {
+  // input: Objeto com @refs já resolvidos
+  // ctx.env: Acesso a integrações
+  
+  // Seu código aqui
+  
+  return {
+    // DEVE conter TODAS as propriedades do outputSchema
+  };
+}
+```
+
+### Regras Importantes
+
+1. **Assinatura correta**: `(input, ctx)` - input é o primeiro parâmetro
+2. **Retorno completo**: Incluir TODAS as propriedades do outputSchema
+3. **Try/Catch obrigatório**: Sempre retornar valores seguros em caso de erro
+4. **Optional chaining**: Usar `?.` para acessar propriedades
+
+### Exemplo Completo
+
+```javascript
+export default async function(input, ctx) {
+  const cityName = input.cityName;
+  
+  try {
+    // Chamando tool de IA
+    const result = await ctx.env['i:ai-generation'].AI_GENERATE_OBJECT({
+      model: 'anthropic:claude-sonnet-4-5',
+      messages: [
+        {
+          role: 'user',
+          content: `Escreva um poema curto sobre ${cityName}`
+        }
+      ],
+      schema: {
+        type: 'object',
+        properties: {
+          poem: { type: 'string' }
+        }
+      },
+      temperature: 0.7
+    });
+    
+    // Processar resultado
+    const poem = result.object?.poem || '';
+    const wordCount = poem.split(' ').length;
+    
+    // CRÍTICO: Retornar TODAS as propriedades do outputSchema
+    return {
+      poem,
+      wordCount
+    };
+    
+  } catch (error) {
+    // Em caso de erro, retornar valores seguros
+    return {
+      poem: '',
+      wordCount: 0,
+      error: String(error)
+    };
+  }
+}
+```
+
+## Sistema de @References
+
+### O que são @refs?
+
+@refs são referências que permitem usar outputs de steps anteriores como input de steps seguintes.
+
+### Sintaxe
+
+```
+@stepId.fieldName
+@stepId.fieldName.subfield
+```
+
+### Como Funciona
+
+1. **@refs são declarados no campo** `input` **do step**
+2. **São resolvidos ANTES da função executar**
+3. **Você acessa os valores já resolvidos através do parâmetro** `input`
+
+### Exemplo Prático
+
+```json
+// Step 1: Gera poema
+{
+  "def": {
+    "name": "generate-poem",
+    "outputSchema": {
+      "properties": {
+        "poem": { "type": "string" },
+        "cityName": { "type": "string" }
+      }
+    },
+    "execute": "..."
+  },
+  "input": {
+    "city": "São Paulo"
+  }
+}
+
+// Step 2: Analisa poema (usa output do Step 1)
+{
+  "def": {
+    "name": "analyze-poem",
+    "inputSchema": {
+      "properties": {
+        "poemText": { "type": "string" },
+        "city": { "type": "string" }
+      }
+    },
+    "execute": "export default async function(input, ctx) { ... }"
+  },
+  "input": {
+    "poemText": "@generate-poem.poem",
+    "city": "@generate-poem.cityName"
+  }
+}
+```
+
+Quando o Step 2 executar, `input.poemText` já conterá o poema gerado e `input.city` conterá o nome da cidade.
+
+### Erros Comuns com @refs
+
+**Erro: "Path not found in step result"**
+
+Isso acontece quando:
+
+- O @ref aponta para uma propriedade que não existe no output do step anterior
+- O step anterior não retornou todas as propriedades do outputSchema
+
+**Solução:**
+
+```javascript
+// ✅ CORRETO: Retorna TODAS as propriedades
+return {
+  poem: result?.object?.poem || '',
+  cityName: input.city,
+  wordCount: wordCount
+};
+
+// ❌ ERRADO: Falta propriedades
+return {
+  poem: result?.object?.poem
+  // Faltam cityName e wordCount!
+};
+```
+
+## Schemas (Input e Output)
+
+### JSON Schema
+
+Workflows usam JSON Schema para validação:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "nome": {
+      "type": "string",
+      "description": "Nome do usuário",
+      "minLength": 1
+    },
+    "idade": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 150
+    },
+    "email": {
+      "type": "string",
+      "format": "email"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["nome", "email"]
+}
+```
+
+### Tipos Suportados
+
+- `string`: Texto
+- `number`: Números (integer ou float)
+- `boolean`: true/false
+- `object`: Objetos aninhados
+- `array`: Arrays/listas
+- `null`: Valor nulo
+
+### Validações
+
+**String:**
+
+- `minLength`, `maxLength`: Tamanho
+- `pattern`: Regex
+- `format`: email, uri, date-time, etc
+
+**Number:**
+
+- `minimum`, `maximum`: Limites
+- `multipleOf`: Múltiplo de
+
+**Array:**
+
+- `minItems`, `maxItems`: Tamanho
+- `items`: Schema dos itens
+
+## Dependencies (Integrações)
+
+### Estrutura
+
+```json
+{
+  "dependencies": [
+    {
+      "integrationId": "i:ai-generation",
+      "toolNames": ["AI_GENERATE_OBJECT", "AI_GENERATE_TEXT"]
+    },
+    {
+      "integrationId": "i:http",
+      "toolNames": ["HTTP_FETCH"]
+    }
+  ]
+}
+```
+
+### Integrações Comuns
+
+**i:ai-generation** - IA Generativa
+
+- AI_GENERATE_OBJECT
+- AI_GENERATE_TEXT
+- AI_GENERATE_IMAGE
+
+**i:http** - Requisições HTTP
+
+- HTTP_FETCH
+
+**i:databases-management** - Banco de Dados
+
+- DATABASE_QUERY
+- DATABASE_INSERT
+- DATABASE_UPDATE
+
+### Acessando Tools
+
+```javascript
+// Sintaxe: ctx.env['integrationId'].TOOL_NAME(params)
+
+const result = await ctx.env['i:ai-generation'].AI_GENERATE_OBJECT({
+  model: 'anthropic:claude-sonnet-4-5',
+  messages: [...],
+  schema: {...}
+});
+
+const response = await ctx.env['i:http'].HTTP_FETCH({
+  url: 'https://api.example.com/data',
+  method: 'GET'
+});
+```
+
+## Workflow Completo - Exemplo
+
+```json
+{
+  "name": "city-poem-analysis",
+  "description": "Gera um poema sobre uma cidade e analisa o sentimento",
+  "steps": [
+    {
+      "def": {
+        "name": "generate-poem",
+        "description": "Gera poema sobre a cidade",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "cityName": { "type": "string" }
+          },
+          "required": ["cityName"]
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "poem": { "type": "string" },
+            "cityName": { "type": "string" }
+          },
+          "required": ["poem", "cityName"]
+        },
+        "execute": "export default async function(input, ctx) { const result = await ctx.env['i:ai-generation'].AI_GENERATE_OBJECT({ model: 'anthropic:claude-sonnet-4-5', messages: [{ role: 'user', content: `Escreva um poema sobre ${input.cityName}` }], schema: { type: 'object', properties: { poem: { type: 'string' } } } }); return { poem: result.object?.poem || '', cityName: input.cityName }; }",
+        "dependencies": [
+          {
+            "integrationId": "i:ai-generation",
+            "toolNames": ["AI_GENERATE_OBJECT"]
+          }
+        ]
+      },
+      "input": {
+        "cityName": "@input.city"
+      }
+    },
+    {
+      "def": {
+        "name": "analyze-sentiment",
+        "description": "Analisa o sentimento do poema",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": { "type": "string" }
+          }
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "sentiment": { "type": "string" },
+            "score": { "type": "number" }
+          }
+        },
+        "execute": "export default async function(input, ctx) { const result = await ctx.env['i:ai-generation'].AI_GENERATE_OBJECT({ model: 'anthropic:claude-sonnet-4-5', messages: [{ role: 'user', content: `Analise o sentimento deste texto: ${input.text}` }], schema: { type: 'object', properties: { sentiment: { type: 'string' }, score: { type: 'number' } } } }); return { sentiment: result.object?.sentiment || 'neutral', score: result.object?.score || 0 }; }",
+        "dependencies": [
+          {
+            "integrationId": "i:ai-generation",
+            "toolNames": ["AI_GENERATE_OBJECT"]
+          }
+        ]
+      },
+      "input": {
+        "text": "@generate-poem.poem"
+      }
+    }
+  ]
+}
+```
+
+## Best Practices
+
+### 1. Nomenclatura
+
+- Use nomes descritivos para steps: `fetch-user-data`, `calculate-total`
+- Use kebab-case para nomes de steps
+- Descreva claramente o propósito de cada step
+
+### 2. Schemas
+
+- Defina inputSchema e outputSchema completos
+- Use descriptions em todas as propriedades
+- Marque campos obrigatórios em `required`
+
+### 3. Error Handling
+
+- Sempre use try/catch
+- Retorne valores seguros em caso de erro
+- Inclua campo `error` no outputSchema para debugging
+
+### 4. Modularidade
+
+- Cada step deve fazer UMA coisa bem feita
+- Steps pequenos são mais fáceis de testar e debugar
+- Reutilize outputs entre steps com @refs
+
+### 5. Testing
+
+- Use `stopAfter` para testar steps incrementalmente
+- Teste cada step isoladamente primeiro
+- Valide schemas antes de executar
+
+### 6. Performance
+
+- Configure timeouts apropriados
+- Use retries com backoff exponencial
+- Evite operações bloqueantes
+
+## Debugging
+
+### Teste Incremental
+
+```javascript
+// Executar apenas até o step 2
+await DECO_WORKFLOW_START({
+  uri: 'rsc://workflow/my-workflow',
+  input: { city: 'São Paulo' },
+  stopAfter: 'analyze-sentiment'
+});
+```
+
+### Injetar Estado
+
+```javascript
+// Pular step 1, começar do step 2
+await DECO_WORKFLOW_START({
+  uri: 'rsc://workflow/my-workflow',
+  input: { city: 'São Paulo' },
+  state: {
+    'generate-poem': {
+      poem: 'Poema de teste...',
+      cityName: 'São Paulo'
+    }
+  }
+});
+```
+
+### Logs e Monitoramento
+
+Use `DECO_RESOURCE_WORKFLOW_RUN_READ` para:
+
+- Ver status atual
+- Acessar logs de execução
+- Verificar resultados parciais
+- Identificar erros
+
+## Recursos Adicionais
+
+### Comandos Úteis
+
+- `DECO_RESOURCE_WORKFLOW_CREATE` - Criar workflow
+- `DECO_RESOURCE_WORKFLOW_UPDATE` - Atualizar workflow
+- `DECO_WORKFLOW_START` - Executar workflow
+- `DECO_RESOURCE_WORKFLOW_RUN_READ` - Ver status
+- `DECO_WORKFLOW_CREATE_STEP` - Adicionar step
+- `DECO_WORKFLOW_EDIT_STEP` - Editar step
+- `DECO_WORKFLOW_READ_STEP` - Ler step
+
+### Padrões de Workflow
+
+**ETL (Extract, Transform, Load)**
+
+```
+Step 1: Extrair dados (HTTP_FETCH)
+Step 2: Transformar dados (código)
+Step 3: Carregar dados (DATABASE_INSERT)
+```
+
+**AI Pipeline**
+
+```
+Step 1: Gerar conteúdo (AI_GENERATE_TEXT)
+Step 2: Revisar conteúdo (AI_GENERATE_OBJECT)
+Step 3: Salvar resultado (DATABASE_INSERT)
+```
+
+**Approval Flow**
+
+```
+Step 1: Processar requisição
+Step 2: Validar dados
+Step 3: Enviar notificação
+Step 4: Aguardar aprovação
+```
+
+## Conclusão
+
+Workflows são uma ferramenta poderosa para automatizar processos complexos. Seguindo esta estrutura e as best practices, você pode criar workflows robustos, manuteníveis e escaláveis.
+
+### Pontos-Chave para Lembrar
+
+1. ✅ Cada step é uma tool call (função async)
+2. ✅ @refs são resolvidos antes da execução
+3. ✅ Sempre retorne TODAS as propriedades do outputSchema
+4. ✅ Use try/catch em todas as tool calls
+5. ✅ Declare dependencies com integrationId e toolNames
+6. ✅ Teste incrementalmente com stopAfter
+7. ✅ Use schemas para validação automática
+8. ✅ Mantenha steps focados e modulares
+
+---
