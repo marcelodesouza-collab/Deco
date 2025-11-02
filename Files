@@ -1,0 +1,15 @@
+# Inicializar git (se ainda não tiver)
+git init
+
+# Adicionar todos os arquivos
+git add .
+
+# Fazer o commit inicial
+git commit -m "Initial commit"
+
+# Adicionar o remote (substitua NOME-DO-REPO pelo nome que você criou)
+git remote add origin https://github.com/marcelodesouza-collab/NOME-DO-REPO.git
+
+# Fazer push para o GitHub
+git branch -M main
+git push -u origin main
