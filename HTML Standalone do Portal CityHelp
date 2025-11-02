@@ -1,0 +1,539 @@
+## 🎨 HTML Standalone do Portal CityHelp
+
+Vou gerar o código HTML completo que você pode usar **imediatamente**!
+
+---
+
+## 📋 Copie e Cole Esse Código:
+
+Crie um arquivo chamado `cityhelp-portal.html` e cole isso:
+
+```html
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CityHelp - Portal do Cidadão</title>
+  
+  <!-- Tailwind CSS v4 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React 19 -->
+  <script crossorigin src="https://unpkg.com/react@19/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@19/umd/react-dom.production.min.js"></script>
+  
+  <!-- Babel Standalone para JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    .gradient-bg {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .card-hover {
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .card-hover:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // Mock Data
+    const mockReports = [
+      {
+        id: 1,
+        type: 'Buraco na via',
+        description: 'Grande buraco na Av. Paulista próximo ao metrô',
+        location: 'Av. Paulista, 1578',
+        status: 'Em Análise',
+        date: '2024-01-15',
+        urgency: 'Alta',
+        category: 'Infraestrutura'
+      },
+      {
+        id: 2,
+        type: 'Lixo acumulado',
+        description: 'Lixo não coletado há 3 dias',
+        location: 'Rua Augusta, 234',
+        status: 'Resolvido',
+        date: '2024-01-10',
+        urgency: 'Média',
+        category: 'Limpeza'
+      }
+    ];
+
+    // Simular callTool (modo demo)
+    window.callTool = async ({ integrationId, toolName, input }) => {
+      console.log('🔧 Tool Called:', toolName, input);
+      
+      // Simular delay de API
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Mock responses
+      if (toolName === 'complete-report-submission-v2') {
+        return {
+          success: true,
+          reportId: Math.floor(Math.random() * 10000),
+          message: 'Denúncia registrada com sucesso!'
+        };
+      }
+      
+      if (toolName === 'list-user-reports') {
+        return { reports: mockReports };
+      }
+      
+      return { success: true };
+    };
+
+    // Componente Principal
+    function CityHelpPortal() {
+      const [view, setView] = useState('login'); // login, dashboard, newReport, myReports
+      const [user, setUser] = useState(null);
+      const [reports, setReports] = useState(mockReports);
+      const [loading, setLoading] = useState(false);
+
+      // Login Component
+      const LoginView = () => {
+        const [email, setEmail] = useState('');
+
+        const handleLogin = async (e) => {
+          e.preventDefault();
+          setLoading(true);
+          
+          // Simular autenticação
+          await new Promise(resolve => setTimeout(resolve, 800));
+          
+          setUser({
+            email,
+            name: email.split('@')[0],
+            cpf: '000.000.000-00'
+          });
+          setView('dashboard');
+          setLoading(false);
+        };
+
+        return (
+          <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+              <div className="text-center mb-8">
+                <h1 className="text-4xl font-bold text-gray-800 mb-2">🏙️ CityHelp</h1>
+                <p className="text-gray-600">Portal do Cidadão</p>
+              </div>
+
+              <form onSubmit={handleLogin}>
+                <div className="mb-6">
+                  <label className="block text-gray-700 font-medium mb-2">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="seu@email.com"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-3 rounded-lg font-medium hover:from-purple-700 hover:to-indigo-700 transition disabled:opacity-50"
+                >
+                  {loading ? 'Entrando...' : 'Entrar'}
+                </button>
+              </form>
+
+              <div className="mt-6 text-center text-sm text-gray-500">
+                <p>🔒 Acesso seguro e anônimo</p>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // Dashboard Component
+      const DashboardView = () => {
+        return (
+          <div className="min-h-screen bg-gray-50">
+            {/* Header */}
+            <header className="gradient-bg text-white shadow-lg">
+              <div className="container mx-auto px-4 py-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h1 className="text-3xl font-bold">🏙️ CityHelp</h1>
+                    <p className="text-purple-100">Olá, {user.name}!</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setUser(null);
+                      setView('login');
+                    }}
+                    className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition"
+                  >
+                    Sair
+                  </button>
+                </div>
+              </div>
+            </header>
+
+            {/* Main Content */}
+            <div className="container mx-auto px-4 py-8">
+              <div className="grid md:grid-cols-2 gap-6 mb-8">
+                {/* Nova Denúncia */}
+                <div
+                  onClick={() => setView('newReport')}
+                  className="card-hover bg-white rounded-xl shadow-lg p-8 cursor-pointer border-2 border-transparent hover:border-purple-500"
+                >
+                  <div className="text-5xl mb-4">📝</div>
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                    Nova Denúncia
+                  </h2>
+                  <p className="text-gray-600">
+                    Registre problemas urbanos e ajude a melhorar sua cidade
+                  </p>
+                </div>
+
+                {/* Minhas Denúncias */}
+                <div
+                  onClick={() => setView('myReports')}
+                  className="card-hover bg-white rounded-xl shadow-lg p-8 cursor-pointer border-2 border-transparent hover:border-purple-500"
+                >
+                  <div className="text-5xl mb-4">📋</div>
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                    Minhas Denúncias
+                  </h2>
+                  <p className="text-gray-600">
+                    Acompanhe o status das suas solicitações
+                  </p>
+                  <div className="mt-4 text-3xl font-bold text-purple-600">
+                    {reports.length}
+                  </div>
+                </div>
+              </div>
+
+              {/* Estatísticas */}
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">
+                  📊 Estatísticas Recentes
+                </h3>
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="text-center p-4 bg-green-50 rounded-lg">
+                    <div className="text-3xl font-bold text-green-600">
+                      {reports.filter(r => r.status === 'Resolvido').length}
+                    </div>
+                    <div className="text-gray-600">Resolvidas</div>
+                  </div>
+                  <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                    <div className="text-3xl font-bold text-yellow-600">
+                      {reports.filter(r => r.status === 'Em Análise').length}
+                    </div>
+                    <div className="text-gray-600">Em Análise</div>
+                  </div>
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <div className="text-3xl font-bold text-blue-600">
+                      {reports.length}
+                    </div>
+                    <div className="text-gray-600">Total</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // New Report Component
+      const NewReportView = () => {
+        const [formData, setFormData] = useState({
+          type: '',
+          description: '',
+          location: '',
+          image: null
+        });
+        const [submitted, setSubmitted] = useState(false);
+
+        const handleSubmit = async (e) => {
+          e.preventDefault();
+          setLoading(true);
+
+          const result = await window.callTool({
+            integrationId: 'i:workflows-management',
+            toolName: 'complete-report-submission-v2',
+            input: {
+              ...formData,
+              userEmail: user.email
+            }
+          });
+
+          setLoading(false);
+          
+          if (result.success) {
+            setSubmitted(true);
+            setTimeout(() => {
+              setView('dashboard');
+              setSubmitted(false);
+            }, 2000);
+          }
+        };
+
+        if (submitted) {
+          return (
+            <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
+                <div className="text-6xl mb-4">✅</div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                  Denúncia Registrada!
+                </h2>
+                <p className="text-gray-600">
+                  Você receberá atualizações por email
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="min-h-screen bg-gray-50">
+            <header className="gradient-bg text-white shadow-lg">
+              <div className="container mx-auto px-4 py-6">
+                <button
+                  onClick={() => setView('dashboard')}
+                  className="mb-4 text-purple-100 hover:text-white"
+                >
+                  ← Voltar
+                </button>
+                <h1 className="text-3xl font-bold">📝 Nova Denúncia</h1>
+              </div>
+            </header>
+
+            <div className="container mx-auto px-4 py-8 max-w-2xl">
+              <div className="bg-white rounded-xl shadow-lg p-8">
+                <form onSubmit={handleSubmit}>
+                  <div className="mb-6">
+                    <label className="block text-gray-700 font-medium mb-2">
+                      Tipo de Problema
+                    </label>
+                    <select
+                      value={formData.type}
+                      onChange={(e) => setFormData({...formData, type: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      required
+                    >
+                      <option value="">Selecione...</option>
+                      <option value="Buraco na via">🕳️ Buraco na via</option>
+                      <option value="Lixo acumulado">🗑️ Lixo acumulado</option>
+                      <option value="Iluminação pública">💡 Iluminação pública</option>
+                      <option value="Calçada danificada">🚧 Calçada danificada</option>
+                      <option value="Sinalização">🚦 Sinalização</option>
+                      <option value="Outro">📋 Outro</option>
+                    </select>
+                  </div>
+
+                  <div className="mb-6">
+                    <label className="block text-gray-700 font-medium mb-2">
+                      Localização
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.location}
+                      onChange={(e) => setFormData({...formData, location: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      placeholder="Endereço completo ou ponto de referência"
+                      required
+                    />
+                  </div>
+
+                  <div className="mb-6">
+                    <label className="block text-gray-700 font-medium mb-2">
+                      Descrição
+                    </label>
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) => setFormData({...formData, description: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      rows="4"
+                      placeholder="Descreva o problema em detalhes..."
+                      required
+                    />
+                  </div>
+
+                  <div className="mb-6">
+                    <label className="block text-gray-700 font-medium mb-2">
+                      Foto (Opcional)
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setFormData({...formData, image: e.target.files[0]})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-3 rounded-lg font-medium hover:from-purple-700 hover:to-indigo-700 transition disabled:opacity-50"
+                  >
+                    {loading ? 'Enviando...' : 'Enviar Denúncia'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // My Reports Component
+      const MyReportsView = () => {
+        const getStatusColor = (status) => {
+          switch (status) {
+            case 'Resolvido': return 'bg-green-100 text-green-800';
+            case 'Em Análise': return 'bg-yellow-100 text-yellow-800';
+            case 'Pendente': return 'bg-gray-100 text-gray-800';
+            default: return 'bg-blue-100 text-blue-800';
+          }
+        };
+
+        const getUrgencyColor = (urgency) => {
+          switch (urgency) {
+            case 'Alta': return 'text-red-600';
+            case 'Média': return 'text-yellow-600';
+            case 'Baixa': return 'text-green-600';
+            default: return 'text-gray-600';
+          }
+        };
+
+        return (
+          <div className="min-h-screen bg-gray-50">
+            <header className="gradient-bg text-white shadow-lg">
+              <div className="container mx-auto px-4 py-6">
+                <button
+                  onClick={() => setView('dashboard')}
+                  className="mb-4 text-purple-100 hover:text-white"
+                >
+                  ← Voltar
+                </button>
+                <h1 className="text-3xl font-bold">📋 Minhas Denúncias</h1>
+              </div>
+            </header>
+
+            <div className="container mx-auto px-4 py-8">
+              <div className="space-y-4">
+                {reports.map((report) => (
+                  <div
+                    key={report.id}
+                    className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-800">
+                          {report.type}
+                        </h3>
+                        <p className="text-gray-600 text-sm">#{report.id}</p>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(report.status)}`}>
+                        {report.status}
+                      </span>
+                    </div>
+
+                    <p className="text-gray-700 mb-4">{report.description}</p>
+
+                    <div className="grid md:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-500">📍 Local:</span>
+                        <p className="font-medium">{report.location}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">📅 Data:</span>
+                        <p className="font-medium">{report.date}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">⚡ Urgência:</span>
+                        <p className={`font-medium ${getUrgencyColor(report.urgency)}`}>
+                          {report.urgency}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {reports.length === 0 && (
+                <div className="text-center py-12">
+                  <div className="text-6xl mb-4">📭</div>
+                  <p className="text-gray-600">Você ainda não tem denúncias registradas</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      };
+
+      // Render based on view
+      return (
+        <>
+          {view === 'login' && <LoginView />}
+          {view === 'dashboard' && <DashboardView />}
+          {view === 'newReport' && <NewReportView />}
+          {view === 'myReports' && <MyReportsView />}
+        </>
+      );
+    }
+
+    // Render App
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<CityHelpPortal />);
+  </script>
+</body>
+</html>
+```
+
+---
+
+## 🚀 Como Usar:
+
+### **Opção 1: Abrir Localmente**
+1. Salve o código acima como `cityhelp-portal.html`
+2. Dê duplo clique no arquivo
+3. Abre no navegador! ✅
+
+### **Opção 2: GitHub Pages (Grátis)**
+1. Crie um repo no GitHub
+2. Faça upload do arquivo como `index.html`
+3. Ative GitHub Pages em Settings
+4. URL pública em 1 minuto!
+
+### **Opção 3: Cloudflare Pages**
+1. Acesse: https://pages.cloudflare.com/
+2. Drag & drop do arquivo HTML
+3. Deploy instantâneo!
+
+---
+
+## ✨ Funcionalidades Incluídas:
+
+- ✅ Login com email
+- ✅ Dashboard principal
+- ✅ Criar nova denúncia
+- ✅ Ver minhas denúncias
+- ✅ Dados mock para demonstração
+- ✅ Design responsivo (mobile-friendly)
+- ✅ Animações e transições
+- ✅ Pronto para conectar à API real
+
+---
+
+**Copie o código e teste agora!** 🎉
