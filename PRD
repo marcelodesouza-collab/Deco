@@ -1,0 +1,952 @@
+# CityHelp — Plataforma de Denúncias e Soluções Comunitárias
+
+## Executive Summary
+
+**Problem Statement**:Moradores de pequenas e médias cidades têm dificuldade para reportar problemas urbanos como buracos, falta de iluminação, lixo acumulado, calçadas quebradas, entre outros. Os canais tradicionais (telefone, presencial) são ineficientes, não há transparência sobre o status das soluções, e as prefeituras/ONGs não têm visibilidade consolidada dos problemas.
+
+**Solution Overview**:CityHelp é uma plataforma web AI-native onde cidadãos reportam problemas urbanos através de fotos e localização. A IA classifica automaticamente o tipo e urgência do problema. Prefeituras e ONGs acessam um dashboard com mapa interativo, visualização de todas as denúncias, status de resolução e sistema de notificações automáticas.
+
+**Key Goals:**
+
+- Reduzir o tempo de resposta da prefeitura em 50%
+- Aumentar a transparência: 100% das denúncias visíveis publicamente
+- Priorização inteligente: IA classifica urgência automaticamente
+- Engajamento comunitário: cidadãos acompanham status das soluções
+
+## User Stories & Use Cases
+
+### Primary Users
+
+1. **Cidadãos** - Moradores que querem reportar problemas na cidade
+2. **Gestores Públicos** - Prefeituras, secretarias e órgãos municipais
+3. **ONGs** - Organizações que atuam em melhorias urbanas
+4. **Administradores** - Equipe técnica que gerencia a plataforma
+
+### Use Cases
+
+1. **Reportar Problema Urbano**
+
+   - Como um **cidadão**
+   - Eu quero **tirar foto de um buraco e enviar com localização**
+   - Para que **a prefeitura seja notificada automaticamente**
+
+2. **Visualizar Dashboard de Denúncias**
+
+   - Como um **gestor público**
+   - Eu quero **ver todas as denúncias em um mapa interativo**
+   - Para que **eu possa priorizar e alocar recursos eficientemente**
+
+3. **Classificação Automática**
+
+   - Como um **administrador da plataforma**
+   - Eu quero que **a IA classifique automaticamente o tipo e urgência**
+   - Para que **reduzamos trabalho manual e aceleremos respostas**
+
+4. **Acompanhar Status**
+
+   - Como um **cidadão**
+   - Eu quero **receber notificações sobre o status da minha denúncia**
+   - Para que **eu saiba quando o problema será resolvido**
+
+5. **Priorização Inteligente**
+
+   - Como um **gestor público**
+   - Eu quero **ver quais problemas são mais urgentes**
+   - Para que **eu atenda primeiro os casos críticos**
+
+## System Architecture
+
+### Tools (MCP Integrations)
+
+**1.** `REPORT_CREATE`
+
+- **Description:** Cria uma nova denúncia no sistema
+
+- **Input Schema:**
+
+  ```typescript
+  {
+    citizenName: string,
+    citizenEmail: string,
+    citizenPhone?: string,
+    description: string,
+    imageUrl: string, // URL da imagem no file system
+    latitude: number,
+    longitude: number,
+    address: string
+  }
+  ```
+
+- **Output Schema:**
+
+  ```typescript
+  {
+    reportId: string,
+    status: "pending",
+    category: string, // classificado pela IA
+    priority: "low" | "medium" | "high" | "urgent",
+    createdAt: string
+  }
+  ```
+
+- **External Service:** Database (internal)
+
+**2.** `REPORT_UPDATE_STATUS`
+
+- **Description:** Atualiza o status de uma denúncia
+
+- **Input Schema:**
+
+  ```typescript
+  {
+    reportId: string,
+    status: "pending" | "in_progress" | "resolved" | "rejected",
+    notes?: string,
+    resolvedBy?: string,
+    resolvedAt?: string
+  }
+  ```
+
+- **Output Schema:**
+
+  ```typescript
+  {
+    reportId: string,
+    status: string,
+    updatedAt: string
+  }
+  ```
+
+- **External Service:** Database + Email/WhatsApp notification
+
+**3.** `REPORT_LIST`
+
+- **Description:** Lista denúncias com filtros
+
+- **Input Schema:**
+
+  ```typescript
+  {
+    status?: string,
+    category?: string,
+    priority?: string,
+    city?: string,
+    limit?: number,
+    offset?: number
+  }
+  ```
+
+- **Output Schema:**
+
+  ```typescript
+  {
+    reports: Report[],
+    total: number,
+    hasMore: boolean
+  }
+  ```
+
+- **External Service:** Database
+
+**4.** `GEOCODE_ADDRESS`
+
+- **Description:** Converte coordenadas em endereço legível
+
+- **Input Schema:**
+
+  ```typescript
+  {
+    latitude: number,
+    longitude: number
+  }
+  ```
+
+- **Output Schema:**
+
+  ```typescript
+  {
+    address: string,
+    city: string,
+    state: string,
+    postalCode: string
+  }
+  ```
+
+- **External Service:** Google Maps Geocoding API
+
+**5.** `IMAGE_UPLOAD`
+
+- **Description:** Upload de imagem da denúncia
+
+- **Input Schema:**
+
+  ```typescript
+  {
+    file: File,
+    reportId?: string
+  }
+  ```
+
+- **Output Schema:**
+
+  ```typescript
+  {
+    url: string,
+    fileId: string,
+    uploadedAt: string
+  }
+  ```
+
+- **External Service:** File System (Deco)
+
+**6.** `NOTIFICATION_SEND`
+
+- **Description:** Envia notificação via email ou WhatsApp
+
+- **Input Schema:**
+
+  ```typescript
+  {
+    recipient: string, // email ou telefone
+    channel: "email" | "whatsapp",
+    template: string,
+    data: object
+  }
+  ```
+
+- **Output Schema:**
+
+  ```typescript
+  {
+    messageId: string,
+    status: "sent" | "failed",
+    sentAt: string
+  }
+  ```
+
+- **External Service:** SendGrid (email) / Twilio (WhatsApp)
+
+### Agents
+
+**Agent 1: Classification Agent**
+
+- **Description:** Classifica automaticamente o tipo e urgência da denúncia com base na descrição e imagem
+
+- **Model:** GPT-4o (com suporte a visão)
+
+- **Key Instructions:**
+
+  ```
+  Você é um especialista em problemas urbanos. Analise a imagem e descrição fornecidas e classifique:
+  
+  1. CATEGORIA: buraco, iluminacao, lixo, calcada, vegetacao, sinalizacao, outros
+  2. URGÊNCIA: low (cosmético), medium (incomodo), high (risco moderado), urgent (risco imediato)
+  3. DESCRIÇÃO DETALHADA: gere uma descrição técnica com 2-3 frases
+  
+  Considere:
+  - Buracos grandes = urgent
+  - Falta iluminação em área perigosa = high
+  - Lixo acumulado = medium
+  - Placa quebrada = low
+  
+  Retorne JSON estruturado: {category, priority, detailedDescription}
+  ```
+
+- **Toolset:** IMAGE_ANALYSIS (integração com GPT-4o vision)
+
+- **Visibility:** workspace (privado)
+
+**Agent 2: Citizen Support Agent**
+
+- **Description:** Assistente conversacional que ajuda cidadãos a criar denúncias e acompanhar status
+
+- **Model:** GPT-4o-mini
+
+- **Key Instructions:**
+
+  ```
+  Você é o assistente virtual do CityHelp. Ajude cidadãos de forma amigável e eficiente.
+  
+  Quando um cidadão descrever um problema:
+  1. Pergunte localização (endereço ou coordenadas)
+  2. Solicite foto
+  3. Confirme dados antes de criar denúncia
+  4. Após criar, informe o ID e explique próximos passos
+  
+  Para consultas de status:
+  1. Peça o ID da denúncia
+  2. Busque informações atualizadas
+  3. Explique status de forma clara
+  
+  Seja empático e mostre que a prefeitura está trabalhando.
+  ```
+
+- **Toolset:** REPORT_CREATE, REPORT_LIST, IMAGE_UPLOAD, GEOCODE_ADDRESS
+
+- **Visibility:** public (acessível a cidadãos)
+
+**Agent 3: City Manager Agent**
+
+- **Description:** Assistente para gestores públicos com análises e relatórios
+
+- **Model:** GPT-4o
+
+- **Key Instructions:**
+
+  ```
+  Você é um assistente especializado para gestores públicos municipais.
+  
+  Forneça:
+  - Análises de tendências ("Quais são os 5 problemas mais reportados?")
+  - Priorização ("Quais denúncias devemos resolver primeiro?")
+  - Insights de dados ("Qual bairro tem mais problemas?")
+  - Relatórios executivos
+  
+  Use dados reais do sistema e apresente números concretos.
+  Sugira ações baseadas em prioridade e recursos disponíveis.
+  ```
+
+- **Toolset:** REPORT_LIST, ANALYTICS_QUERY (custom tool)
+
+- **Visibility:** workspace (apenas gestores)
+
+### Workflows
+
+**Workflow 1: Complete Report Submission**
+
+- **Description:** Fluxo completo de criação de denúncia com classificação IA e notificações
+
+- **Steps:**
+
+  1. **Step 1 (Validate & Upload):**
+
+     - Input: `{citizenData, description, imageFile, location}`
+     - Action: Valida dados, faz upload da imagem via `ctx.env['i:file-system'].IMAGE_UPLOAD()`
+     - Output: `{...input, imageUrl: uploadResult.url}`
+
+  2. **Step 2 (Geocode Location):**
+
+     - Input: `@step1` (output do step anterior)
+     - Action: Chama `ctx.env['i:self'].GEOCODE_ADDRESS({lat: @input.location.lat, lng: @input.location.lng})`
+     - Output: `{...@step1, address: geocodeResult.address, city: geocodeResult.city}`
+
+  3. **Step 3 (AI Classification):**
+
+     - Input: `@step2`
+     - Action: Invoca Classification Agent via `ctx.env['i:agent-management'].AGENTS_RUN()` com imagem e descrição
+     - Output: `{...@step2, category: aiResult.category, priority: aiResult.priority, detailedDescription: aiResult.detailedDescription}`
+
+  4. **Step 4 (Create Report):**
+
+     - Input: `@step3`
+     - Action: Chama `ctx.env['i:self'].REPORT_CREATE()` com todos os dados
+     - Output: `{reportId: newReport.id, status: "pending", ...@step3}`
+
+  5. **Step 5 (Send Notifications):**
+
+     - Input: `@step4`
+     - Action: Envia notificações paralelas:
+       - Email para cidadão confirmando denúncia
+       - Email/WhatsApp para prefeitura (se urgente)
+     - Output: `{...@step4, notificationsSent: true, citizenNotificationId: msg1.id, cityNotificationId: msg2.id}`
+
+- **Output:** Objeto completo com reportId, status, category, priority, notificações enviadas
+
+**Workflow 2: Status Update & Notification**
+
+- **Description:** Atualiza status e notifica cidadão automaticamente
+
+- **Steps:**
+
+  1. **Step 1 (Update Status):**
+
+     - Input: `{reportId, newStatus, notes, resolvedBy}`
+     - Action: `ctx.env['i:self'].REPORT_UPDATE_STATUS()`
+     - Output: `{...input, updatedAt: timestamp}`
+
+  2. **Step 2 (Get Report Details):**
+
+     - Input: `@step1`
+     - Action: Busca dados completos do report com `REPORT_LIST({reportId: @input.reportId})`
+     - Output: `{...@step1, report: fullReportData}`
+
+  3. **Step 3 (Send Citizen Notification):**
+
+     - Input: `@step2`
+     - Action: `ctx.env['i:self'].NOTIFICATION_SEND()` com template baseado em status
+     - Output: `{...@step2, notificationSent: true}`
+
+- **Output:** Confirmação de atualização com notificação enviada
+
+**Workflow 3: Daily Priority Report**
+
+- **Description:** Gera relatório diário com denúncias prioritárias para gestores
+
+- **Steps:**
+
+  1. **Step 1 (Fetch Urgent Reports):**
+
+     - Input: `{}`
+     - Action: `ctx.env['i:self'].REPORT_LIST({status: "pending", priority: "urgent"})`
+     - Output: `{urgentReports: reports}`
+
+  2. **Step 2 (Fetch High Priority):**
+
+     - Input: `@step1`
+     - Action: `ctx.env['i:self'].REPORT_LIST({status: "pending", priority: "high"})`
+     - Output: `{...@step1, highPriorityReports: reports}`
+
+  3. **Step 3 (Generate Report):**
+
+     - Input: `@step2`
+     - Action: Formata relatório em HTML/Markdown
+     - Output: `{...@step2, reportHtml: formattedReport}`
+
+  4. **Step 4 (Send to Managers):**
+
+     - Input: `@step3`
+     - Action: `ctx.env['i:self'].NOTIFICATION_SEND()` para lista de emails de gestores
+     - Output: `{reportSent: true, recipients: emailList}`
+
+- **Output:** Confirmação de envio do relatório diário
+
+### Triggers
+
+**Trigger 1: Daily Priority Report**
+
+- **Description:** Envia relatório diário de denúncias prioritárias às 8h
+- **Type:** cron
+- **Frequency:** `0 8 * * *` (todos os dias às 8h)
+- **Target Type:** Workflow
+- **Target:** Daily Priority Report workflow
+- **Arguments:** `{}`
+
+**Trigger 2: Weekly Metrics Digest**
+
+- **Description:** Relatório semanal com métricas consolidadas
+- **Type:** cron
+- **Frequency:** `0 9 * * 1` (toda segunda-feira às 9h)
+- **Target Type:** Workflow
+- **Target:** Weekly Analytics workflow
+- **Arguments:** `{period: "last_7_days"}`
+
+**Integration:** Default MCP (`i:self`)
+
+### Views
+
+**View 1: Citizen Report Form**
+
+- **Description:** Formulário amigável para cidadãos reportarem problemas
+- **Key Features:**
+  - Upload de foto com preview
+  - Seletor de localização (mapa ou GPS do navegador)
+  - Campo de descrição opcional
+  - Formulário de contato (nome, email, telefone)
+  - Preview da denúncia antes de enviar
+  - Feedback visual após submissão
+- **Tools Called:**
+  - `IMAGE_UPLOAD` - upload da foto
+  - `GEOCODE_ADDRESS` - conversão de coordenadas
+  - Workflow: `Complete Report Submission`
+- **UI Components:**
+  - File input com drag & drop
+  - Mapa interativo (Google Maps ou Leaflet)
+  - Botão "Usar minha localização"
+  - Progress bar durante submissão
+  - Modal de confirmação com ID da denúncia
+
+**View 2: City Dashboard**
+
+- **Description:** Dashboard completo para gestores públicos
+- **Key Features:**
+  - Mapa com pins de todas as denúncias (cores por prioridade)
+  - Filtros: status, categoria, prioridade, data
+  - Cards com KPIs: total denúncias, resolvidas, pendentes, tempo médio
+  - Lista de denúncias com detalhes
+  - Ação rápida para atualizar status
+  - Gráficos de tendências (últimos 30 dias)
+- **Tools Called:**
+  - `REPORT_LIST` - busca denúncias
+  - `REPORT_UPDATE_STATUS` - atualização de status
+  - `ANALYTICS_QUERY` - dados para gráficos
+- **UI Components:**
+  - Mapa interativo full-width
+  - Cards estatísticos no topo
+  - Tabela responsiva com paginação
+  - Modais para detalhes da denúncia
+  - Dropdowns para filtros
+  - Gráficos (Chart.js ou Recharts)
+
+**View 3: Public Reports Map**
+
+- **Description:** Mapa público onde cidadãos veem todas as denúncias
+- **Key Features:**
+  - Mapa com todas denúncias públicas
+  - Filtro por categoria
+  - Visualização de detalhes (sem dados pessoais)
+  - Status de cada denúncia
+  - Possibilidade de "apoiar" uma denúncia
+- **Tools Called:**
+  - `REPORT_LIST` - apenas status pending e in_progress
+- **UI Components:**
+  - Mapa full-screen
+  - Sidebar com lista de denúncias
+  - Filtros por categoria
+  - Cards com informações públicas
+  - Botão "Reportar novo problema"
+
+**View 4: Report Status Tracker**
+
+- **Description:** Página onde cidadãos acompanham suas denúncias
+- **Key Features:**
+  - Busca por ID ou email
+  - Timeline visual do status
+  - Histórico de atualizações
+  - Estimativa de resolução
+  - Botão para contatar suporte
+- **Tools Called:**
+  - `REPORT_LIST` - busca específica
+- **UI Components:**
+  - Campo de busca
+  - Timeline vertical
+  - Cards com detalhes
+  - Badge de status
+  - Link para abrir chat com Citizen Support Agent
+
+### Databases
+
+**Model 1: Report**
+
+- **Fields:**
+
+  ```typescript
+  {
+    id: string (UUID, primary key),
+    citizenName: string,
+    citizenEmail: string,
+    citizenPhone: string?,
+    description: string,
+    detailedDescription: string, // gerado pela IA
+    category: "buraco" | "iluminacao" | "lixo" | "calcada" | "vegetacao" | "sinalizacao" | "outros",
+    priority: "low" | "medium" | "high" | "urgent",
+    status: "pending" | "in_progress" | "resolved" | "rejected",
+    imageUrl: string,
+    imageFileId: string,
+    latitude: number,
+    longitude: number,
+    address: string,
+    city: string,
+    state: string,
+    postalCode: string?,
+    resolvedBy: string?, // nome do responsável
+    resolvedAt: timestamp?,
+    notes: string?, // notas internas
+    createdAt: timestamp,
+    updatedAt: timestamp
+  }
+  ```
+
+- **Validation:**
+
+  - citizenEmail: valid email format
+  - latitude: -90 to 90
+  - longitude: -180 to 180
+  - category: enum validation
+  - priority: enum validation
+  - status: enum validation
+
+- **Relationships:**
+
+  - Has many: StatusHistory (histórico de mudanças)
+  - Has many: Comments (comentários internos)
+
+**Model 2: StatusHistory**
+
+- **Fields:**
+
+  ```typescript
+  {
+    id: string (UUID, primary key),
+    reportId: string (foreign key -> Report),
+    oldStatus: string,
+    newStatus: string,
+    changedBy: string,
+    notes: string?,
+    changedAt: timestamp
+  }
+  ```
+
+- **Validation:**
+
+  - reportId: must exist in Report table
+  - oldStatus/newStatus: enum validation
+
+- **Relationships:**
+
+  - Belongs to: Report
+
+**Model 3: CityConfig**
+
+- **Fields:**
+
+  ```typescript
+  {
+    id: string (UUID, primary key),
+    cityName: string,
+    state: string,
+    contactEmail: string,
+    contactPhone: string?,
+    whatsappNumber: string?,
+    notificationPreferences: {
+      urgentImmediately: boolean,
+      dailyDigest: boolean,
+      weeklyReport: boolean
+    },
+    managerEmails: string[], // lista de emails de gestores
+    boundingBox: { // limites geográficos da cidade
+      north: number,
+      south: number,
+      east: number,
+      west: number
+    },
+    createdAt: timestamp,
+    updatedAt: timestamp
+  }
+  ```
+
+- **Validation:**
+
+  - contactEmail: valid email format
+  - managerEmails: array of valid emails
+  - boundingBox: valid coordinates
+
+- **Relationships:**
+
+  - Has many: Reports (via city name)
+
+## Data Models & Schemas
+
+```typescript
+import { z } from "zod";
+
+// Report Schema
+export const ReportSchema = z.object({
+  id: z.string().uuid(),
+  citizenName: z.string().min(1, "Nome obrigatório"),
+  citizenEmail: z.string().email("Email inválido"),
+  citizenPhone: z.string().optional(),
+  description: z.string().min(10, "Descrição deve ter pelo menos 10 caracteres"),
+  detailedDescription: z.string(),
+  category: z.enum(["buraco", "iluminacao", "lixo", "calcada", "vegetacao", "sinalizacao", "outros"]),
+  priority: z.enum(["low", "medium", "high", "urgent"]),
+  status: z.enum(["pending", "in_progress", "resolved", "rejected"]),
+  imageUrl: z.string().url(),
+  imageFileId: z.string(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  address: z.string(),
+  city: z.string(),
+  state: z.string(),
+  postalCode: z.string().optional(),
+  resolvedBy: z.string().optional(),
+  resolvedAt: z.string().datetime().optional(),
+  notes: z.string().optional(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export type Report = z.infer<typeof ReportSchema>;
+
+// Input para criar denúncia
+export const CreateReportInput = z.object({
+  citizenName: z.string().min(1),
+  citizenEmail: z.string().email(),
+  citizenPhone: z.string().optional(),
+  description: z.string().min(10),
+  imageFile: z.instanceof(File),
+  latitude: z.number(),
+  longitude: z.number(),
+});
+
+// Input para atualizar status
+export const UpdateStatusInput = z.object({
+  reportId: z.string().uuid(),
+  status: z.enum(["pending", "in_progress", "resolved", "rejected"]),
+  notes: z.string().optional(),
+  resolvedBy: z.string().optional(),
+});
+
+// Filtros para listagem
+export const ReportFilters = z.object({
+  status: z.enum(["pending", "in_progress", "resolved", "rejected"]).optional(),
+  category: z.string().optional(),
+  priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+  city: z.string().optional(),
+  limit: z.number().int().positive().max(100).default(20),
+  offset: z.number().int().nonnegative().default(0),
+});
+
+// AI Classification Output
+export const AIClassificationResult = z.object({
+  category: z.enum(["buraco", "iluminacao", "lixo", "calcada", "vegetacao", "sinalizacao", "outros"]),
+  priority: z.enum(["low", "medium", "high", "urgent"]),
+  detailedDescription: z.string(),
+  confidence: z.number().min(0).max(1), // confiança da IA
+});
+```
+
+## Success Metrics
+
+### Citizen Engagement
+
+- **Reports Created:** 500+ no primeiro mês, 2000+ após 6 meses
+- **Return Rate:** 40% dos cidadãos criam mais de uma denúncia
+- **Average Description Length:** 50+ caracteres (indicador de qualidade)
+
+### Government Efficiency
+
+- **Response Time:** Reduzir de 15 dias para 7 dias em média
+- **Resolution Rate:** 80% das denúncias resolvidas em 30 dias
+- **Urgent Cases:** 100% respondidas em 24h
+
+### System Performance
+
+- **AI Classification Accuracy:** 90%+ de precisão validada por gestores
+- **Upload Success Rate:** 99%+ de uploads bem-sucedidos
+- **Dashboard Load Time:** &lt; 2 segundos
+
+### Transparency
+
+- **Public Visibility:** 100% das denúncias visíveis no mapa público
+- **Status Updates:** Média de 3+ atualizações por denúncia
+- **Notification Delivery:** 98%+ de emails/mensagens entregues
+
+## Implementation Timeline
+
+### **Phase 1: Core Infrastructure** (Week 1-2)
+
+- [ ] Setup workspace e configurações iniciais
+
+- [ ] Criar Database models (Report, StatusHistory, CityConfig)
+
+- [ ] Implementar ferramentas básicas:
+
+  - [ ] REPORT_CREATE
+
+  - [ ] REPORT_LIST
+
+  - [ ] REPORT_UPDATE_STATUS
+
+  - [ ] IMAGE_UPLOAD
+
+- [ ] Configurar integração com File System
+
+- [ ] Configurar Google Maps API para geocoding
+
+### **Phase 2: AI & Automation** (Week 3-4)
+
+- [ ] Criar Classification Agent (GPT-4o com visão)
+
+- [ ] Testar e calibrar prompts de classificação
+
+- [ ] Implementar Complete Report Submission workflow
+
+- [ ] Configurar integração de notificações (SendGrid/Twilio)
+
+- [ ] Criar NOTIFICATION_SEND tool
+
+- [ ] Implementar Status Update & Notification workflow
+
+### **Phase 3: User Interfaces** (Week 5-6)
+
+- [ ] Desenvolver Citizen Report Form view
+
+  - [ ] Upload de imagem com preview
+
+  - [ ] Integração com GPS do navegador
+
+  - [ ] Formulário validado
+
+- [ ] Desenvolver City Dashboard view
+
+  - [ ] Mapa interativo com pins
+
+  - [ ] KPIs e estatísticas
+
+  - [ ] Lista com filtros
+
+- [ ] Desenvolver Public Reports Map view
+
+- [ ] Testes de usabilidade com cidadãos
+
+### **Phase 4: Advanced Features** (Week 7-8)
+
+- [ ] Criar Citizen Support Agent (chatbot público)
+
+- [ ] Criar City Manager Agent (análises para gestores)
+
+- [ ] Implementar Report Status Tracker view
+
+- [ ] Implementar Daily Priority Report workflow
+
+- [ ] Configurar triggers automáticos (cron jobs)
+
+- [ ] Sistema de analytics e métricas
+
+### **Phase 5: Testing & Launch** (Week 9-10)
+
+- [ ] Testes end-to-end completos
+
+- [ ] Testes de carga (simular 100+ denúncias simultâneas)
+
+- [ ] Validação de AI classification com dados reais
+
+- [ ] Treinamento com equipe da prefeitura
+
+- [ ] Documentação completa
+
+- [ ] Soft launch com cidade piloto
+
+- [ ] Coleta de feedback inicial
+
+- [ ] Ajustes e otimizações
+
+- [ ] Launch público
+
+## Technical Decisions & Trade-offs
+
+### 1. **AI Model Selection: GPT-4o vs GPT-4o-mini**
+
+**Decision:** GPT-4o para Classification Agent, GPT-4o-mini para Citizen Support Agent
+
+**Rationale:**
+
+- Classification precisa de visão (análise de imagem) e alta precisão
+- Suporte ao cidadão é conversacional e não requer visão
+- Reduz custos mantendo qualidade onde necessário
+
+### 2. **Geocoding: Google Maps vs OpenStreetMap**
+
+**Decision:** Google Maps API
+
+**Rationale:**
+
+- Maior precisão em cidades brasileiras
+- Dados mais atualizados
+- Integração simples
+- Trade-off: custo por requisição (mas volume é controlado)
+
+### 3. **Notification Channels: Email + WhatsApp**
+
+**Decision:** Suportar ambos, configurável por cidade
+
+**Rationale:**
+
+- Email para comunicação formal com cidadãos
+- WhatsApp para alertas urgentes à prefeitura
+- Flexibilidade: cidades escolhem o canal preferido
+
+### 4. **Database: Resources 2.0 (DECONFIG) vs External Postgres**
+
+**Decision:** Resources 2.0 nativo da plataforma
+
+**Rationale:**
+
+- Simplifica stack (sem infraestrutura externa)
+- Versionamento automático
+- Schema validation com Zod
+- Admin UI gerado automaticamente
+- Trade-off: menos flexibilidade em queries complexas, mas suficiente para o caso de uso
+
+### 5. **Map Library: Google Maps vs Leaflet**
+
+**Decision:** Leaflet (open-source) nos views
+
+**Rationale:**
+
+- Custo zero (vs Google Maps que cobra por visualizações)
+- Customização total
+- Performance excelente
+- OpenStreetMap como base gratuita
+- Trade-off: interface menos polida, mas funcional
+
+### 6. **Priority Calculation: Manual vs AI-based**
+
+**Decision:** AI-based com override manual
+
+**Rationale:**
+
+- Reduz carga de trabalho manual
+- Consistência na priorização
+- Gestores podem ajustar se necessário
+- IA aprende padrões da cidade específica
+
+### 7. **Public Visibility: Full vs Filtered**
+
+**Decision:** Todas denúncias públicas (sem dados pessoais)
+
+**Rationale:**
+
+- Máxima transparência
+- Engajamento comunitário
+- Pressão positiva para resolução
+- Remove informações sensíveis (email, telefone)
+
+## Open Questions
+
+- [ ] **Multi-tenancy:** Como gerenciar múltiplas cidades na mesma instalação?
+
+  - Opção A: Workspace separado por cidade
+  - Opção B: Single workspace com filtro por cidade
+  - Recomendação: Single workspace, filtro por cidade (mais econômico)
+
+- [ ] **Moderação:** Denúncias falsas ou spam serão um problema?
+
+  - Solução proposta: Rate limit por IP, verificação de email obrigatória
+  - Considerar: Sistema de "report abuse" para denúncias inadequadas
+
+- [ ] **Escalabilidade:** Quantas denúncias simultâneas o sistema aguenta?
+
+  - Cloudflare Workers suporta milhares de requests/segundo
+  - Testar com 1000 denúncias em 1 minuto
+
+- [ ] **Gamificação:** Vale adicionar badges/pontos para cidadãos engajados?
+
+  - Pode aumentar engajamento
+  - Fase 2: adicionar "Citizen Score" e rankings
+
+- [ ] **Mobile App:** Criar app nativo ou PWA é suficiente?
+
+  - PWA primeiro (mais rápido, menor custo)
+  - Se tração boa → app nativo iOS/Android
+
+- [ ] **Integração com Sistemas Legados:** Prefeituras já têm sistemas?
+
+  - Oferecer API pública para integração
+  - Webhook para notificar sistemas externos
+
+---
+
+## Next Steps
+
+1. 
+
+- [ ] **Review com stakeholders** - Validar requisitos com prefeituras piloto
+
+- [ ] **Definir cidade piloto** - Escolher cidade de 50k-200k habitantes
+
+- [ ] **Setup ambiente de desenvolvimento** - Criar workspace, configurar APIs
+
+- [ ] **Begin Phase 1 implementation** - Database models e tools básicos
+
+- [ ] **Design UI mockups** - Wireframes das views principais
+
+- [ ] **Configurar integrations** - Google Maps, SendGrid, Twilio
+
+- [ ] **Criar documento de onboarding** - Tutorial para equipes de prefeituras
+
+---
+
+**Última atualização:** 2025-10-31\
+**Versão:** 1.0\
+**Autor:** CityHelp Product Team
