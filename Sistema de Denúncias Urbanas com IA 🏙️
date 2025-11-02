@@ -1,0 +1,173 @@
+# Sistema de Denúncias Urbanas com IA 🏙️
+
+## 📋 Visão Geral
+
+Sistema inteligente para cidadãos reportarem problemas urbanos (buracos, lixo, iluminação, etc.) com processamento automático via IA e dashboard para gestores públicos.
+
+---
+
+## 🎯 Problema que Resolve
+
+**Para Cidadãos:**
+
+- Dificuldade em reportar problemas urbanos
+- Falta de feedback sobre denúncias
+- Processo burocrático e demorado
+
+**Para Gestores Públicos:**
+
+- Sobrecarga de denúncias manuais
+- Dificuldade em priorizar urgências
+- Falta de métricas e análises
+
+---
+
+## ✨ Funcionalidades Principais
+
+### Para Cidadãos
+
+1. **Formulário de Denúncia Inteligente**
+
+   - Upload de foto do problema
+   - Descrição em linguagem natural
+   - Localização automática
+   - Classificação automática por IA
+
+2. **Rastreamento de Status**
+
+   - Acompanhar denúncia em tempo real
+   - Notificações de mudança de status
+   - Histórico completo
+
+### Para Gestores Públicos
+
+1. **Dashboard Analytics**
+
+   - Visualização de todas denúncias
+   - Métricas por categoria e região
+   - Identificação de urgências
+   - Relatórios automatizados
+
+2. **Sistema de Priorização**
+
+   - IA classifica urgência automaticamente
+   - Agrupamento por tipo de problema
+   - Distribuição para equipes responsáveis
+
+---
+
+## 🤖 Arquitetura Técnica
+
+### 1. **Agents (Assistentes IA)**
+
+**Classification Agent**
+
+- Analisa foto + descrição
+- Classifica tipo: buraco, lixo, iluminação, etc.
+- Define nível de urgência: baixa, média, alta, crítica
+- Extrai localização e detalhes
+
+**Citizen Support Agent**
+
+- Atende cidadãos via chat
+- Ajuda a criar denúncias
+- Responde dúvidas sobre status
+- Interface conversacional
+
+**City Manager Agent**
+
+- Assistente para gestores públicos
+- Gera relatórios e análises
+- Recomenda ações prioritárias
+- Insights baseados em dados
+
+### 2. **Views (Interfaces)**
+
+**Report Form View**
+
+- Formulário React responsivo
+- Upload de imagem drag-and-drop
+- Validação em tempo real
+- Preview da denúncia
+
+**Status Tracker View**
+
+- Busca por ID da denúncia
+- Timeline visual do processo
+- Status: Pendente → Em Análise → Em Andamento → Resolvida
+
+**Analytics Dashboard View**
+
+- Gráficos interativos
+- Filtros por data, categoria, região
+- Métricas: total, resolvidas, tempo médio
+- Mapa de calor de problemas
+
+### 3. **Database (Armazenamento)**
+
+**Reports Table**
+
+```typescript
+{
+  id: number,
+  citizen_name: string,
+  description: string,
+  photo_url: string,
+  location: string,
+  category: string,
+  urgency: string,
+  status: string,
+  created_at: timestamp,
+  updated_at: timestamp
+}
+```
+
+### 4. **Workflows**
+
+1. Cidadão submete denúncia
+2. Upload de foto para storage
+3. Classification Agent analisa
+4. Salva no database com classificação
+5. Notifica gestor
+6. Atualiza dashboard em tempo real
+
+---
+
+## 🛠️ Stack Tecnológica
+
+- **Plataforma:** Deco CMS
+- **Frontend:** React 19 + Tailwind CSS v4
+- **Backend:** Cloudflare Workers
+- **Database:** Cloudflare Durable Objects
+- **IA:** GPT-4 Vision
+- **Deploy:** Edge global
+
+---
+
+## 💡 Diferenciais
+
+✅ IA de verdade - Classificação automática ✅ Tempo real - Dashboard instantâneo ✅ Edge Computing - Performance global ✅ Zero Setup - Plataforma all-in-one ✅ Escalável - Milhares de denúncias ✅ Open Source - Código aberto
+
+---
+
+## 🚀 Como Usar
+
+### Para Cidadãos
+
+1. Acesse o formulário
+2. Envie foto do problema
+3. Descreva em poucas palavras
+4. Receba ID de rastreamento
+5. Acompanhe status
+
+### Para Gestores
+
+1. Acesse dashboard
+2. Visualize por urgência
+3. Filtre por categoria/região
+4. Atribua para equipes
+5. Atualize status
+
+---
+
+**Desenvolvido para o Hackathon usando Deco CMS**
